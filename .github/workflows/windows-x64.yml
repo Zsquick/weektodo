@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 20
           cache: yarn
 
       - name: Show tool versions
@@ -32,7 +32,7 @@ jobs:
           yarn --version
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile --ignore-engines --ignore-scripts --network-timeout 300000
+        run: yarn install --frozen-lockfile --ignore-engines --network-timeout 300000
 
       - name: Build Windows x64 installer
         run: yarn electron:build --win --x64 --publish never
