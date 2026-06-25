@@ -32,6 +32,8 @@ jobs:
           yarn --version
 
       - name: Install dependencies
+        env:
+          npm_config_ignore_scripts: "true"
         run: yarn install --frozen-lockfile --ignore-engines --network-timeout 300000
 
       - name: Build Windows x64 installer
