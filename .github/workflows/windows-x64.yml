@@ -12,7 +12,9 @@ on:
 
 jobs:
   build-windows-x64:
-    runs-on: windows-latest
+    runs-on: windows-2022
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
 
     steps:
       - name: Checkout
@@ -21,11 +23,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 16
           cache: yarn
 
+      - name: Show tool versions
+        run: |
+          node --version
+          yarn --version
+
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --frozen-lockfile --ignore-engines --ignore-scripts --network-timeout 300000
 
       - name: Build Windows x64 installer
         run: yarn electron:build --win --x64 --publish never
