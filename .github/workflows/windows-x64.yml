@@ -1,0 +1,42 @@
+name: Build Windows x64 Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - pomodoro-timer
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build Windows x64 installer
+        run: yarn electron:build --win --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeekToDo-Windows-x64-installer
+          path: |
+            dist_electron/*.exe
+            dist_electron/*.blockmap
+          if-no-files-found: error
