@@ -18,6 +18,12 @@
             }} <div class="alarm-indicator" :class="{ 'show-alarm-indicator': notificationIndicator && toDo.alarm }">
               </div></span>
           </span>
+          <button class="pomodoro-button" :class="{ 'active-pomodoro': activePomodoro }" @click.stop.prevent="startPomodoro"
+            :title="pomodoroTitle" :disabled="toDo.checked">
+            <i class="bi-stopwatch"></i>
+            <span v-if="activePomodoro">{{ activePomodoroTime }}</span>
+            <span v-else-if="pomodoroSessions > 0">{{ pomodoroSessions }}</span>
+          </button>
           <span v-if="compactView" class="item-time" :class="{ 'checked-todo': toDo.checked }"> {{ timeFormat(toDo.time)
           }}
             <div class="alarm-indicator" :class="{ 'show-alarm-indicator': notificationIndicator && toDo.alarm }"></div>
@@ -34,6 +40,7 @@
 import toDoListRepository from "../repositories/toDoListRepository";
 import moment from "moment";
 import linkifyStr from 'linkify-string';
+import pomodoroTimer from "../helpers/pomodoroTimer";
 
 export default {
   components: {},
@@ -47,8 +54,18 @@ export default {
       editing: false,
       text: this.toDo.text,
       todoDragHover: false,
-      options: { target: '_blank', defaultProtocol: 'https' }
+      options: { target: '_blank', defaultProtocol: 'https' },
+      pomodoroState: pomodoroTimer.getState(),
+      unsubscribePomodoro: null,
     };
+  },
+  mounted() {
+    this.unsubscribePomodoro = pomodoroTimer.subscribe((state) => {
+      this.pomodoroState = state;
+    });
+  },
+  unmounted() {
+    if (this.unsubscribePomodoro) this.unsubscribePomodoro();
   },
   methods: {
     editToDo: function () {
@@ -84,6 +101,13 @@ export default {
         return moment(date, "HH:mm").format("hh:mm a");
       }
     },
+    startPomodoro: function () {
+      pomodoroTimer.start({
+        todo: this.toDo,
+        todoListId: this.toDoListId,
+        save: () => toDoListRepository.update(this.toDoListId, this.$store.getters.todoLists[this.toDoListId]),
+      });
+    },
     showToDoItem: function () {
       var activeTodo = {
         toDo: this.toDo,
@@ -116,6 +140,19 @@ export default {
     },
     notificationIndicator: function () {
       return this.$store.getters.config.notificationIndicator;
+    },
+    activePomodoro: function () {
+      return pomodoroTimer.isActive(this.toDo, this.toDoListId, this.pomodoroState.subTaskIndex);
+    },
+    activePomodoroTime: function () {
+      return pomodoroTimer.formatSeconds(this.pomodoroState.remainingSeconds);
+    },
+    pomodoroSessions: function () {
+      return this.toDo.pomodoro ? this.toDo.pomodoro.completedSessions : 0;
+    },
+    pomodoroTitle: function () {
+      if (this.toDo.subTaskList && this.toDo.subTaskList.length > 0) return "Start pomodoro for subtasks in order";
+      return "Start pomodoro";
     }
   }
 };
@@ -257,6 +294,43 @@ export default {
 .bi-check-circle-fill,
 .bi-check-circle {
   opacity: 0.7;
+}
+
+.pomodoro-button {
+  align-items: center;
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: grey;
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 3px;
+  line-height: 1.1rem;
+  margin: 3px 4px 0 0;
+  min-width: 20px;
+  padding: 1px 5px;
+}
+
+.pomodoro-button:hover,
+.pomodoro-button.active-pomodoro {
+  background-color: #f1f3f5;
+  color: #1e1e1e;
+}
+
+.pomodoro-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.dark-theme .pomodoro-button {
+  color: #c9d1d9;
+}
+
+.dark-theme .pomodoro-button:hover,
+.dark-theme .pomodoro-button.active-pomodoro {
+  background-color: #30363d;
+  color: #ffffff;
 }
 
 .todo-item-container.compact-view {

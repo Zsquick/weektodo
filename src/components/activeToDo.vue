@@ -17,6 +17,12 @@
             :class="{ 'show-alarm-indicator': notificationIndicator && activeTodo.toDo.alarm }"></div>
         </span>
       </span>
+      <button class="pomodoro-button" :class="{ 'active-pomodoro': activeTodoPomodoro }" @click.stop.prevent="startTodoPomodoro"
+        :title="activeTodoPomodoro ? activePomodoroTime : 'Start pomodoro'" :disabled="activeTodo.toDo.checked">
+        <i class="bi-stopwatch"></i>
+        <span v-if="activeTodoPomodoro">{{ activePomodoroTime }}</span>
+        <span v-else-if="todoPomodoroSessions > 0">{{ todoPomodoroSessions }}</span>
+      </button>
       <i class="bi-three-dots todo-item-menu" type="button" @click="showToDoDetails"></i>
       <i class="bi-x todo-item-remove" @click="removeTodo"></i>
     </div>
@@ -27,9 +33,16 @@
           <div class="d-flex flex-row mt-1" :class="{ 'checked-sub-task': subTask.checked }">
             <input class="form-check-input" type="checkbox" v-model="subTask.checked"
               @change="checkSubTask(subTask, index, $event)" />
-            <label class="form-check-label" @click="checkSubTask(subTask, index, $event)">
+            <label class="form-check-label flex-grow-1" @click="checkSubTask(subTask, index, $event)">
               <span v-html="linkifyText(subTask.text)"></span>
             </label>
+            <button class="sub-task-pomodoro-button" :class="{ 'active-pomodoro': isSubTaskPomodoroActive(index) }"
+              @click.stop.prevent="startSubTaskPomodoro(index)" :title="isSubTaskPomodoroActive(index) ? activePomodoroTime : 'Start subtask pomodoro'"
+              :disabled="subTask.checked">
+              <i class="bi-stopwatch"></i>
+              <span v-if="isSubTaskPomodoroActive(index)">{{ activePomodoroTime }}</span>
+              <span v-else-if="subTaskPomodoroSessions(subTask) > 0">{{ subTaskPomodoroSessions(subTask) }}</span>
+            </button>
           </div>
         </li>
       </ul>
@@ -45,6 +58,7 @@ import notifications from "../helpers/notifications";
 import linkifyStr from 'linkify-string';
 import ClickHandler from "@manuelernestog/click-handler";
 import tasksHelper from "../helpers/tasksHelper";
+import pomodoroTimer from "../helpers/pomodoroTimer";
 
 export default {
   components: {},
@@ -58,8 +72,18 @@ export default {
       todoDragging: false,
       options: { target: '_blank', defaultProtocol: 'https' },
       clickhandler: new ClickHandler(),
-      scrollingTimeOut: null
+      scrollingTimeOut: null,
+      pomodoroState: pomodoroTimer.getState(),
+      unsubscribePomodoro: null
     };
+  },
+  mounted() {
+    this.unsubscribePomodoro = pomodoroTimer.subscribe((state) => {
+      this.pomodoroState = state;
+    });
+  },
+  unmounted() {
+    if (this.unsubscribePomodoro) this.unsubscribePomodoro();
   },
   methods: {
     removeTodo: function () {
@@ -139,6 +163,27 @@ export default {
     linkifyText: function (text) {
       return linkifyStr(text, this.options);
     },
+    startTodoPomodoro: function () {
+      pomodoroTimer.start({
+        todo: this.activeTodo.toDo,
+        todoListId: this.activeTodo.toDoListId,
+        save: () => toDoListRepository.update(this.activeTodo.toDoListId, this.$store.getters.todoLists[this.activeTodo.toDoListId]),
+      });
+    },
+    startSubTaskPomodoro: function (index) {
+      pomodoroTimer.start({
+        todo: this.activeTodo.toDo,
+        todoListId: this.activeTodo.toDoListId,
+        subTaskIndex: index,
+        save: () => toDoListRepository.update(this.activeTodo.toDoListId, this.$store.getters.todoLists[this.activeTodo.toDoListId]),
+      });
+    },
+    isSubTaskPomodoroActive: function (index) {
+      return pomodoroTimer.isActive(this.activeTodo.toDo, this.activeTodo.toDoListId, index);
+    },
+    subTaskPomodoroSessions: function (subTask) {
+      return subTask.pomodoro ? subTask.pomodoro.completedSessions : 0;
+    },
     hideToDoItem: function () {
       this.$refs.currentTodo.style.display = `none`;
     },
@@ -167,6 +212,15 @@ export default {
     },
     moveSubtaskToBotttom: function () {
       return this.$store.getters.config.moveCompletedSubTaskToBottom;
+    },
+    activeTodoPomodoro: function () {
+      return pomodoroTimer.isActive(this.activeTodo.toDo, this.activeTodo.toDoListId, null);
+    },
+    activePomodoroTime: function () {
+      return pomodoroTimer.formatSeconds(this.pomodoroState.remainingSeconds);
+    },
+    todoPomodoroSessions: function () {
+      return this.activeTodo.toDo.pomodoro ? this.activeTodo.toDo.pomodoro.completedSessions : 0;
     },
   }
 };
@@ -364,5 +418,55 @@ export default {
 .bi-check-circle-fill,
 .bi-check-circle {
   opacity: 0.7;
+}
+
+.pomodoro-button,
+.sub-task-pomodoro-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: grey;
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 3px;
+  line-height: 1.1rem;
+  padding: 1px 5px;
+}
+
+.pomodoro-button {
+  align-self: flex-start;
+  margin: 3px 0 0 5px;
+}
+
+.sub-task-pomodoro-button {
+  margin: 0 6px 0 8px;
+}
+
+.pomodoro-button:hover,
+.sub-task-pomodoro-button:hover,
+.pomodoro-button.active-pomodoro,
+.sub-task-pomodoro-button.active-pomodoro {
+  background-color: #f1f3f5;
+  color: #1e1e1e;
+}
+
+.pomodoro-button:disabled,
+.sub-task-pomodoro-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.dark-theme .pomodoro-button,
+.dark-theme .sub-task-pomodoro-button {
+  color: #c9d1d9;
+}
+
+.dark-theme .pomodoro-button:hover,
+.dark-theme .sub-task-pomodoro-button:hover,
+.dark-theme .pomodoro-button.active-pomodoro,
+.dark-theme .sub-task-pomodoro-button.active-pomodoro {
+  background-color: #30363d;
+  color: white;
 }
 </style>
